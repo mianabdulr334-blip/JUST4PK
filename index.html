@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,6 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="JUST4PK - Trending Products delivered across Pakistan.">
   <title>JUST4PK | Online Shopping Store</title>
+
+  <!-- Supabase CDN JS Library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
     :root {
@@ -994,9 +998,13 @@
     (() => {
       "use strict";
 
-      const PRODUCTS_KEY = "just4pk_products";
       const WHATSAPP_NUMBER = "923091756056";
-      const WHATSAPP_DISPLAY_NUMBER = "03091756056";
+
+      // SUPABASE CONFIGURATION
+      const SUPABASE_URL = "https://oqbtrppwrinmnxdclelq.supabase.co"; 
+      const SUPABASE_ANON_KEY = "sb_publishable_f-x6mvz5N0sG9TE8nBw1ew_UACqpzK9"; 
+
+      const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
       let products = [];
       let cart = [];
@@ -1068,12 +1076,6 @@
           placeOrderOnWhatsApp
         );
 
-        window.addEventListener("storage", function (event) {
-          if (event.key === PRODUCTS_KEY) {
-            loadProducts();
-          }
-        });
-
         document.addEventListener("keydown", function (event) {
           if (event.key === "Escape") {
             closeCart();
@@ -1081,27 +1083,44 @@
         });
       }
 
-      function readProductsFromStorage() {
-        const raw = localStorage.getItem(PRODUCTS_KEY);
-
-        if (!raw) {
-          return [];
+      async function loadProducts() {
+        if (!supabaseClient) {
+          console.error("Supabase client is not loaded.");
+          return;
         }
 
         try {
-          const parsed = JSON.parse(raw);
+          const { data, error } = await supabaseClient
+            .from('products')
+            .select('*');
 
-          if (!Array.isArray(parsed)) {
-            return [];
+          if (error) {
+            console.error("Supabase Error:", error);
+            return;
           }
 
-          return parsed
-            .filter(item => item && typeof item === "object")
-            .map(normalizeProduct)
-            .filter(item => item.name);
-        } catch (error) {
-          console.error("JUST4PK: Invalid product data.", error);
-          return [];
+          if (data) {
+            products = data.map(normalizeProduct).filter(item => item.name);
+
+            const currentIds = new Set(
+              products.map(product => String(product.id))
+            );
+
+            cart = cart.filter(item => currentIds.has(String(item.id)));
+
+            if (
+              selectedCategory !== "All" &&
+              !products.some(product => product.category === selectedCategory)
+            ) {
+              selectedCategory = "All";
+            }
+
+            renderCategories();
+            renderProducts();
+            updateCartUI();
+          }
+        } catch (err) {
+          console.error("Data fetch error:", err);
         }
       }
 
@@ -1145,27 +1164,6 @@
         const number = parseInt(value, 10);
 
         return Number.isFinite(number) ? Math.max(0, number) : 0;
-      }
-
-      function loadProducts() {
-        products = readProductsFromStorage();
-
-        const currentIds = new Set(
-          products.map(product => String(product.id))
-        );
-
-        cart = cart.filter(item => currentIds.has(String(item.id)));
-
-        if (
-          selectedCategory !== "All" &&
-          !products.some(product => product.category === selectedCategory)
-        ) {
-          selectedCategory = "All";
-        }
-
-        renderCategories();
-        renderProducts();
-        updateCartUI();
       }
 
       function escapeHTML(value) {
